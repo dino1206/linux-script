@@ -1,0 +1,79 @@
+#!/bin/bash
+echo "********************************************************"
+echo "*                                                      *"
+echo "* WARNING : This tool is only used for RHEL 6.4 x86_64 *"
+echo "*                                                      *"
+echo "********************************************************"
+echo
+echo "This host has nics as below :"
+echo 
+dmesg | grep :..:..: |grep -v bond| grep -Po 'eth.|eth..'
+dmesg | grep :..:..: |grep -v bond| grep -Po '..:..:..:..:..:..'
+echo
+echo "compare with rules.d and correct it !!!" 
+echo
+
+read -p "***** please enter new ip ***** : " nip
+read -p "***** please enter new gateway ***** : " ngw
+
+echo
+echo
+echo "ip : $nip "
+echo "gateway : $ngw "
+echo
+echo
+read -p "Is it right ?? [Y|N]" ans
+
+
+if [ "$ans" == "Y" ] || [ "$ans" == "y" ] || [ "$ans" == "yes" ]; then
+
+
+f1=$(dmesg | grep -m 1 :..:..: | grep -v bond | grep -Po 'eth.|eth..' | sed -n 's/eth//p')
+nil=$(dmesg | grep :..:..: | grep -v bond | grep -Po 'eth.|eth..' | sed -n 's/eth//p' | tail -n 1)
+
+
+rm -f /etc/udev/rules.d/70-persistent-net.rules
+
+sed -i '/IPADDR/d' /etc/sysconfig/network-scripts/ifcfg-br0  
+sed -i '/GATEWAY/d' /etc/sysconfig/network-scripts/ifcfg-br0  
+echo IPADDR=$nip >> /etc/sysconfig/network-scripts/ifcfg-br0  
+echo GATEWAY=$ngw >> /etc/sysconfig/network-scripts/ifcfg-br0   
+
+declare -i y=0
+
+for ((x=$f1;x<=$nil;x=x+1))
+
+do
+sed -i '/DEVICE/d' /etc/sysconfig/network-scripts/ifcfg-eth$x
+sed -i '/HWA/d' /etc/sysconfig/network-scripts/ifcfg-eth$x
+mac=$(dmesg | grep :..:..: |grep -v bond|grep eth$x: |  grep -Po '..:..:..:..:..:..')
+echo "SUBSYSTEM==\"net\", ACTION==\"add\", DRIVERS==\"?*\", ATTR{address}==\"$mac\", ATTR{type}==\"1\", KERNEL==\"eth*\", NAME=\"eth$y\"" >> /etc/udev/rules.d/70-persistent-net.rules
+mv /etc/sysconfig/network-scripts/ifcfg-eth$x /etc/sysconfig/network-scripts/ifcfg-eth$y
+echo HWADDR=$mac >> /etc/sysconfig/network-scripts/ifcfg-eth$y
+echo DEVICE=eth$y >> /etc/sysconfig/network-scripts/ifcfg-eth$y
+y=y+1
+
+done
+
+
+
+
+echo
+echo
+echo "Good Job !!! "
+echo
+
+udevadm trigger
+udevadm control --reload-rules
+service network restart
+else 
+
+
+echo 
+echo "Please check again!!! "
+echo "Or you can contact Dino !!!"
+echo
+echo
+
+fi
+
